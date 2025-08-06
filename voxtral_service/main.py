@@ -4,14 +4,12 @@ from transformers import AutoProcessor, VoxtralForConditionalGeneration
 from mistral_common.protocol.instruct.messages import UserMessage
 import torch
 import base64
-import librosa
 import numpy as np
-import io
-# The soundfile library is removed as it was the source of the error.
-# import soundfile as sf 
-# The torchaudio library is added as it is robust for format conversion.
-import torchaudio
+import soundfile as sf # We can use soundfile again now that we are feeding it a clean WAV
 import logging
+import tempfile
+import subprocess # Import the subprocess module
+import os
 
 # Configure logging
 logging.basicConfig(
@@ -57,20 +55,40 @@ def process_audio(request: ASRRequest):
     try:
         audio_data = base64.b64decode(request.audio)
         
-        # --- CRITICAL FIX ---
-        # Replace the fragile sf.read with the robust torchaudio.load
-        # torchaudio uses ffmpeg to handle almost any audio format, including webm.
-        waveform, original_sr = torchaudio.load(io.BytesIO(audio_data))
-        # torchaudio loads to a tensor, convert it to a numpy array
-        audio_np = waveform.numpy().flatten()
+        # --- THE DEFINITIVE FFMPEG FIX ---
+        # Use temporary files to handle the conversion robustly
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.webm') as temp_in:
+            temp_in.write(audio_data)
+            temp_in_path = temp_in.name
+        
+        # Define the output path for the converted WAV file
+        temp_out_path = temp_in_path + '.wav'
+
+        # Build and run the ffmpeg command
+        # -i: input file
+        # -ar 16000: set audio sample rate to 16kHz
+        # -ac 1: set audio channels to 1 (mono)
+        # -f wav: output format is WAV
+        # -y: overwrite output file if it exists
+        command = [
+            "ffmpeg",
+            "-i", temp_in_path,
+            "-ar", "16000",
+            "-ac", "1",
+            "-f", "wav",
+            "-y", temp_out_path
+        ]
+        
+        logger.info(f"Running ffmpeg command: {' '.join(command)}")
+        subprocess.run(command, check=True, capture_output=True)
+
+        # Now, load the perfectly formatted WAV file with soundfile
+        audio_np, original_sr = sf.read(temp_out_path)
+        
+        # Clean up the temporary files
+        os.remove(temp_in_path)
+        os.remove(temp_out_path)
         # --- END OF FIX ---
-
-        if audio_np.ndim > 1:
-            audio_np = np.mean(audio_np, axis=1)
-
-        if original_sr != 16000:
-            logger.info(f"Resampling audio from {original_sr}Hz to 16000Hz.")
-            audio_np = librosa.resample(y=audio_np, orig_sr=original_sr, target_sr=16000)
 
         inputs = processor(
             [UserMessage(content=audio_np)],
@@ -83,6 +101,9 @@ def process_audio(request: ASRRequest):
         
         logger.info(f"Generated response: '{response_text}'")
         return {"text": response_text}
+    except subprocess.CalledProcessError as e:
+        logger.error(f"FFMPEG conversion failed: {e.stderr.decode()}")
+        raise HTTPException(status_code=400, detail=f"Audio conversion failed: {e.stderr.decode()}")
     except Exception as e:
         logger.error(f"Error processing audio: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred while processing audio: {e}")
