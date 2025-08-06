@@ -1,0 +1,11 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+torch==2.4.0
+torchaudio==2.4.0
+# Critical: Modern transformers and mistral-common for Voxtral
+transformers>=4.54.0
+mistral-common[audio]>=1.8.1
+# Audio processing libraries
+librosa
+soundfile
+numpy
