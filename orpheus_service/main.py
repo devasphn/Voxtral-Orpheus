@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from orpheus_speech import OrpheusModel
+from orpheus_tts import OrpheusModel
 import torch
 import base64
 import logging
