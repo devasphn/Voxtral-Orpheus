@@ -3,150 +3,200 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎤 Real-Time Voice Assistant</title>
+    <title>🎤 Voxtral-Orpheus Voice Assistant</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+        
         :root {
-            --bg-gradient: linear-gradient(135deg, #2B32B2 0%, #1488CC 100%);
-            --container-bg: rgba(255, 255, 255, 0.95);
-            --text-dark: #333;
-            --text-light: #f8f9fa;
-            --accent-color: #1488CC;
-            --record-color: #e74c3c;
-            --processing-color: #f39c12;
-            --connected-color: #2ecc71;
-            --shadow: 0 10px 30px rgba(0,0,0,0.1);
+            --primary: #667eea;
+            --primary-dark: #5a67d8;
+            --success: #48bb78;
+            --error: #f56565;
+            --warning: #ed8936;
+            --bg: #f7fafc;
+            --card: white;
+            --text: #2d3748;
+            --text-light: #718096;
+            --border: #e2e8f0;
         }
+        
+        * { box-sizing: border-box; }
+        
         body {
-            font-family: 'Roboto', sans-serif;
-            background: var(--bg-gradient);
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: var(--text-dark);
+        }
+        
+        .container {
+            background: var(--card);
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            max-width: 600px;
+            width: 100%;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin: 0 0 8px 0;
+        }
+        
+        .header p {
+            color: var(--text-light);
             margin: 0;
         }
-        .container {
-            background: var(--container-bg);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 2rem;
-            box-shadow: var(--shadow);
-            max-width: 600px;
-            width: 95%;
+        
+        .status {
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-weight: 600;
             text-align: center;
+            margin: 16px 0;
+            transition: all 0.3s ease;
         }
-        h1 {
-            font-size: 2.5rem;
-            margin-bottom: 1.5rem;
-            color: var(--accent-color);
-        }
-        #status {
-            padding: 1rem;
-            margin: 1rem 0;
-            border-radius: 10px;
-            font-weight: 700;
-            color: var(--text-light);
-            transition: background-color 0.3s ease;
-        }
-        .status-connecting { background-color: var(--processing-color); }
-        .status-connected { background-color: var(--connected-color); }
-        .status-processing { background-color: var(--processing-color); }
-        .status-error { background-color: var(--record-color); }
+        
+        .status.connecting { background: #fef5e7; color: var(--warning); }
+        .status.connected { background: #f0fff4; color: var(--success); }
+        .status.processing { background: #e6fffa; color: #319795; }
+        .status.error { background: #fed7d7; color: var(--error); }
+        
         .controls {
             display: flex;
+            gap: 16px;
             justify-content: center;
             align-items: center;
-            gap: 1rem;
-            margin: 1.5rem 0;
+            margin: 24px 0;
         }
-        #recordBtn {
+        
+        .record-btn {
             width: 80px;
             height: 80px;
             border-radius: 50%;
             border: none;
-            background-color: var(--accent-color);
-            color: var(--text-light);
-            font-size: 3rem;
+            background: var(--primary);
+            color: white;
+            font-size: 32px;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.2s ease;
             display: flex;
             align-items: center;
             justify-content: center;
+            position: relative;
         }
-        #recordBtn:hover:not(:disabled) { transform: scale(1.1); }
-        #recordBtn.recording {
-            background-color: var(--record-color);
-            animation: pulse 1.5s infinite;
+        
+        .record-btn:hover:not(:disabled) {
+            background: var(--primary-dark);
+            transform: scale(1.05);
         }
-        #recordBtn:disabled {
-            background-color: #95a5a6;
+        
+        .record-btn:disabled {
+            background: #a0aec0;
             cursor: not-allowed;
         }
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
-            70% { box-shadow: 0 0 0 20px rgba(231, 76, 60, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+        
+        .record-btn.recording {
+            background: var(--error);
+            animation: pulse 1.5s infinite;
         }
-        select {
-            padding: 0.8rem;
-            border: 2px solid #bdc3c7;
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(245, 101, 101, 0.7); }
+            70% { box-shadow: 0 0 0 20px rgba(245, 101, 101, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(245, 101, 101, 0); }
+        }
+        
+        .voice-select {
+            padding: 12px 16px;
+            border: 2px solid var(--border);
             border-radius: 8px;
-            font-size: 1rem;
+            font-size: 14px;
             background: white;
             cursor: pointer;
+            min-width: 120px;
         }
-        .chat-box {
-            height: 200px;
+        
+        .chat-container {
+            max-height: 300px;
             overflow-y: auto;
-            border: 2px solid #ecf0f1;
-            border-radius: 15px;
-            padding: 1rem;
-            margin: 1.5rem 0;
-            background: #fdfdfd;
-            scroll-behavior: smooth;
-            text-align: left;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            margin: 24px 0;
+            background: #fafafa;
         }
-        .message {
-            margin-bottom: 1rem;
-            padding: 0.8rem 1.2rem;
-            border-radius: 18px;
-            max-width: 85%;
+        
+        .chat-message {
+            margin: 12px 0;
+            padding: 12px 16px;
+            border-radius: 12px;
+            max-width: 80%;
             word-wrap: break-word;
         }
-        .user-msg {
-            background: #e0f7fa;
+        
+        .chat-message.user {
+            background: var(--primary);
+            color: white;
             margin-left: auto;
             border-bottom-right-radius: 4px;
         }
-        .assistant-msg {
-            background: #f1f8e9;
+        
+        .chat-message.assistant {
+            background: white;
+            color: var(--text);
             margin-right: auto;
+            border: 1px solid var(--border);
             border-bottom-left-radius: 4px;
         }
-        .system-msg {
+        
+        .chat-message.system {
+            background: #f7fafc;
+            color: var(--text-light);
             font-style: italic;
-            color: #7f8c8d;
             text-align: center;
-            background: #ecf0f1;
+            margin: 8px auto;
             max-width: 100%;
         }
-        audio {
+        
+        .audio-player {
             width: 100%;
-            margin-top: 1.5rem;
-            border-radius: 50px;
+            margin: 16px 0;
+            border-radius: 8px;
+        }
+        
+        .metrics {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--text-light);
+            margin-top: 16px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Voice Assistant</h1>
-        <div id="status" class="status status-connecting">Connecting...</div>
-
+        <div class="header">
+            <h1>🎤 Voice Assistant</h1>
+            <p>Powered by Voxtral & Orpheus TTS</p>
+        </div>
+        
+        <div id="status" class="status connecting">Connecting to server...</div>
+        
         <div class="controls">
-            <button id="recordBtn" disabled>🎤</button>
-            <select id="voiceSelect">
+            <button id="recordBtn" class="record-btn" disabled>🎤</button>
+            <select id="voiceSelect" class="voice-select">
                 <option value="tara">Tara (Default)</option>
                 <option value="leah">Leah</option>
                 <option value="jess">Jess</option>
@@ -157,137 +207,227 @@
                 <option value="zoe">Zoe</option>
             </select>
         </div>
-
-        <div class="chat-box" id="chatBox"></div>
-        <audio id="audioPlayer" controls></audio>
+        
+        <div id="chatContainer" class="chat-container"></div>
+        
+        <audio id="audioPlayer" class="audio-player" controls></audio>
+        
+        <div class="metrics">
+            <span id="connectionStatus">Disconnected</span>
+            <span id="processingTime">Processing: --ms</span>
+        </div>
     </div>
 
     <script>
-        const statusEl = document.getElementById('status');
-        const recordBtn = document.getElementById('recordBtn');
-        const voiceSelect = document.getElementById('voiceSelect');
-        const chatBox = document.getElementById('chatBox');
-        const audioPlayer = document.getElementById('audioPlayer');
-
+        // Global variables
         let ws;
         let mediaRecorder;
         let audioChunks = [];
         let isRecording = false;
-
+        let isProcessing = false;
+        
+        // DOM elements
+        const statusEl = document.getElementById('status');
+        const recordBtn = document.getElementById('recordBtn');
+        const voiceSelect = document.getElementById('voiceSelect');
+        const chatContainer = document.getElementById('chatContainer');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const processingTime = document.getElementById('processingTime');
+        
+        // Status management
         function setStatus(message, type) {
             statusEl.textContent = message;
-            statusEl.className = `status status-${type}`;
+            statusEl.className = `status ${type}`;
         }
-
-        function addMessage(text, sender) {
+        
+        function addMessage(text, sender, metadata = null) {
             const msgEl = document.createElement('div');
-            msgEl.className = `message ${sender}-msg`;
-            msgEl.textContent = text;
-            chatBox.appendChild(msgEl);
-            chatBox.scrollTop = chatBox.scrollHeight;
+            msgEl.className = `chat-message ${sender}`;
+            
+            if (metadata) {
+                msgEl.innerHTML = `${text}<br><small style="opacity:0.7">${metadata}</small>`;
+            } else {
+                msgEl.textContent = text;
+            }
+            
+            chatContainer.appendChild(msgEl);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
         }
-
+        
+        // WebSocket connection
         function connect() {
             const sessionId = 'session_' + Math.random().toString(36).substring(2, 15);
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const wsUrl = `${protocol}//${window.location.host}/ws/${sessionId}`;
             
+            setStatus('Connecting...', 'connecting');
             ws = new WebSocket(wsUrl);
-
+            
             ws.onopen = () => {
-                setStatus('Connected! Click the mic to speak.', 'connected');
+                setStatus('Connected! Click mic to speak', 'connected');
+                connectionStatus.textContent = 'Connected';
                 requestMicrophoneAccess();
             };
-
+            
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 handleServerMessage(data);
             };
-
+            
             ws.onclose = () => {
                 setStatus('Connection lost. Reconnecting...', 'error');
+                connectionStatus.textContent = 'Reconnecting...';
                 recordBtn.disabled = true;
                 setTimeout(connect, 3000);
             };
-
+            
             ws.onerror = (error) => {
                 console.error('WebSocket Error:', error);
-                setStatus('Connection error.', 'error');
+                setStatus('Connection error', 'error');
             };
         }
-
+        
+        // Microphone access
         async function requestMicrophoneAccess() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-
-                mediaRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0) audioChunks.push(event.data);
+                // Request 16kHz audio to match Voxtral requirements
+                const constraints = {
+                    audio: {
+                        sampleRate: 16000,
+                        channelCount: 1,
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    }
                 };
-
+                
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                
+                // Set up MediaRecorder
+                const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+                    ? 'audio/webm;codecs=opus' 
+                    : 'audio/webm';
+                
+                mediaRecorder = new MediaRecorder(stream, { mimeType });
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+                
                 mediaRecorder.onstop = () => {
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    if (audioChunks.length === 0) {
+                        addMessage('No audio recorded', 'system');
+                        return;
+                    }
+                    
+                    const audioBlob = new Blob(audioChunks, { type: mimeType });
                     const reader = new FileReader();
+                    
                     reader.onload = () => {
                         const base64Audio = reader.result.split(',')[1];
-                        sendMessage({
-                            type: 'audio',
-                            audio: base64Audio,
-                            voice: voiceSelect.value
-                        });
-                        addMessage('You: [Sent voice message]', 'user');
+                        sendAudioMessage(base64Audio);
                     };
+                    
                     reader.readAsDataURL(audioBlob);
                     audioChunks = [];
                 };
                 
                 recordBtn.disabled = false;
-            } catch (error) {
-                console.error('Microphone access denied:', error);
-                setStatus('Microphone access denied!', 'error');
-                addMessage('Microphone is required for voice input.', 'system');
-            }
-        }
-
-        function handleServerMessage(data) {
-            if (data.type === 'audio_response') {
-                setStatus('Response received! Click mic to speak.', 'connected');
-                addMessage(`Assistant: ${data.text}`, 'assistant');
                 
-                const audioSrc = `data:audio/wav;base64,${data.audio}`;
-                audioPlayer.src = audioSrc;
-                audioPlayer.play();
-            } else if (data.type === 'error') {
-                setStatus(`Error: ${data.message}`, 'error');
-                addMessage(`Server Error: ${data.message}`, 'system');
+            } catch (error) {
+                console.error('Microphone access error:', error);
+                setStatus('Microphone access denied', 'error');
+                addMessage('Microphone access required for voice input', 'system');
             }
         }
         
-        function sendMessage(message) {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify(message));
-                setStatus('Processing your request...', 'processing');
+        // Send audio message
+        function sendAudioMessage(base64Audio) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                addMessage('Connection not ready', 'system');
+                return;
+            }
+            
+            setStatus('Processing your request...', 'processing');
+            isProcessing = true;
+            recordBtn.disabled = true;
+            
+            const message = {
+                type: 'audio',
+                audio: base64Audio,
+                voice: voiceSelect.value
+            };
+            
+            ws.send(JSON.stringify(message));
+            addMessage('🎤 Voice message sent', 'user');
+        }
+        
+        // Handle server messages
+        function handleServerMessage(data) {
+            switch (data.type) {
+                case 'audio_response':
+                    setStatus('Response received! Click mic to speak again', 'connected');
+                    
+                    const processingTimeMs = Math.round(data.processing_time * 1000);
+                    processingTime.textContent = `Processing: ${processingTimeMs}ms`;
+                    
+                    addMessage(
+                        data.text, 
+                        'assistant', 
+                        `Generated in ${processingTimeMs}ms with ${data.voice || voiceSelect.value}`
+                    );
+                    
+                    // Play the audio response
+                    const audioSrc = `data:audio/wav;base64,${data.audio}`;
+                    audioPlayer.src = audioSrc;
+                    audioPlayer.play().catch(e => console.warn('Audio play failed:', e));
+                    
+                    isProcessing = false;
+                    recordBtn.disabled = false;
+                    break;
+                    
+                case 'error':
+                    setStatus(`Error: ${data.message}`, 'error');
+                    addMessage(`❌ ${data.message}`, 'system');
+                    isProcessing = false;
+                    recordBtn.disabled = false;
+                    break;
             }
         }
-
+        
+        // Recording controls
         function toggleRecording() {
+            if (isProcessing) {
+                return; // Don't allow recording while processing
+            }
+            
             if (isRecording) {
                 mediaRecorder.stop();
                 isRecording = false;
                 recordBtn.classList.remove('recording');
-                recordBtn.innerHTML = '🎤';
+                recordBtn.textContent = '🎤';
                 setStatus('Processing audio...', 'processing');
             } else {
                 mediaRecorder.start();
                 isRecording = true;
                 recordBtn.classList.add('recording');
-                recordBtn.innerHTML = '◼️';
-                setStatus('Recording... Click to stop.', 'processing');
+                recordBtn.textContent = '⏹️';
+                setStatus('Recording... Click to stop', 'processing');
             }
         }
-
+        
+        // Event listeners
         recordBtn.addEventListener('click', toggleRecording);
+        
+        // Initialize connection
         connect();
+        
+        // Add welcome message
+        setTimeout(() => {
+            addMessage('Welcome! Click the microphone to start speaking.', 'system');
+        }, 1000);
     </script>
 </body>
 </html>
