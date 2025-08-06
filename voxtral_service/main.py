@@ -73,19 +73,18 @@ def process_audio(request: ASRRequest):
         os.remove(temp_out_path)
         
         # --- THE FINAL, DEFINITIVE FIX ---
-        # We will no longer use the buggy high-level processor.__call__ method.
-        # Instead, we use the stable sub-components to build the inputs manually.
-
+        # The Voxtral model requires the special <|audio|> token in the prompt
+        # to know where to insert the audio features. This solves the shape mismatch error.
+        prompt = "Please transcribe the following audio. <|audio|>"
+        
         # 1. Process the audio using the feature extractor.
         audio_inputs = processor.feature_extractor(
             audio_np, sampling_rate=sampling_rate, return_tensors="pt"
         ).to(device)
 
-        # 2. Process the text prompt (even if empty) using the tokenizer.
-        #    We use a standard prompt to instruct the model to be a helpful assistant.
-        prompt = "[ASR] [transcribe] [en] "
+        # 2. Process the text prompt using the tokenizer.
         text_inputs = processor.tokenizer(prompt, return_tensors="pt").to(device)
-
+        
         # 3. The model's generate function correctly accepts both sets of inputs.
         generated_ids = model.generate(
             input_features=audio_inputs.input_features,
@@ -94,12 +93,11 @@ def process_audio(request: ASRRequest):
             max_new_tokens=150
         )
         # --- END OF FIX ---
-
-        # Decode the full output
+        
         full_response = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
         
-        # The model's output includes the prompt, so we remove it to get the clean response.
-        response_text = full_response.replace(prompt, "").strip()
+        # The model's output now includes the prompt, so we remove it.
+        response_text = full_response.replace("Please transcribe the following audio. ", "").strip()
 
         logger.info(f"Generated response: '{response_text}'")
         return {"text": response_text}
