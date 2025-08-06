@@ -2,9 +2,9 @@ fastapi==0.115.0
 uvicorn[standard]==0.30.6
 torch==2.4.0
 torchaudio==2.4.0
-# Install the latest dev version of transformers directly from GitHub for Voxtral
 git+https://github.com/huggingface/transformers.git
 mistral-common[audio]>=1.8.1
+flash-attn==2.7.1 --no-build-isolation
 librosa
 soundfile
 numpy
