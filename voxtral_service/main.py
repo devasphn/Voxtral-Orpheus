@@ -67,27 +67,43 @@ def process_audio(request: ASRRequest):
         
         subprocess.run(command, check=True, capture_output=True, text=True)
 
-        audio_np, original_sr = sf.read(temp_out_path)
+        audio_np, sampling_rate = sf.read(temp_out_path)
         
         os.remove(temp_in_path)
         os.remove(temp_out_path)
         
         # --- THE FINAL, DEFINITIVE FIX ---
-        # The processor requires the 'text' argument, even if it's empty for an audio-only task.
-        # This directly solves the "missing 1 required positional argument: 'text'" TypeError.
-        inputs = processor(
-            text="",  # Provide the required text argument as an empty string.
-            audio=audio_np,
-            sampling_rate=16000,
-            return_tensors="pt"
+        # We will no longer use the buggy high-level processor.__call__ method.
+        # Instead, we use the stable sub-components to build the inputs manually.
+
+        # 1. Process the audio using the feature extractor.
+        audio_inputs = processor.feature_extractor(
+            audio_np, sampling_rate=sampling_rate, return_tensors="pt"
         ).to(device)
+
+        # 2. Process the text prompt (even if empty) using the tokenizer.
+        #    We use a standard prompt to instruct the model to be a helpful assistant.
+        prompt = "[ASR] [transcribe] [en] "
+        text_inputs = processor.tokenizer(prompt, return_tensors="pt").to(device)
+
+        # 3. The model's generate function correctly accepts both sets of inputs.
+        generated_ids = model.generate(
+            input_features=audio_inputs.input_features,
+            input_ids=text_inputs.input_ids,
+            attention_mask=text_inputs.attention_mask,
+            max_new_tokens=150
+        )
         # --- END OF FIX ---
 
-        generated_ids = model.generate(**inputs, max_new_tokens=150)
-        response_text = processor.decode(generated_ids[0], skip_special_tokens=True)
+        # Decode the full output
+        full_response = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
         
+        # The model's output includes the prompt, so we remove it to get the clean response.
+        response_text = full_response.replace(prompt, "").strip()
+
         logger.info(f"Generated response: '{response_text}'")
         return {"text": response_text}
+        
     except subprocess.CalledProcessError as e:
         logger.error(f"FFMPEG conversion failed: {e.stderr}")
         raise HTTPException(status_code=400, detail=f"Audio conversion failed.")
