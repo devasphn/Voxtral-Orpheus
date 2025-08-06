@@ -229,7 +229,6 @@
                     const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                     const reader = new FileReader();
                     reader.onload = () => {
-                        // The result contains the Base64 prefix "data:audio/webm;base64,", so we split it off.
                         const base64Audio = reader.result.split(',')[1];
                         sendMessage({
                             type: 'audio',
@@ -273,14 +272,12 @@
 
         function toggleRecording() {
             if (isRecording) {
-                // Stop recording
                 mediaRecorder.stop();
                 isRecording = false;
                 recordBtn.classList.remove('recording');
                 recordBtn.innerHTML = '🎤';
                 setStatus('Processing audio...', 'processing');
             } else {
-                // Start recording
                 mediaRecorder.start();
                 isRecording = true;
                 recordBtn.classList.add('recording');
