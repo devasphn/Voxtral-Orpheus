@@ -1,16 +1,17 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-# This is the crucial correction you identified.
-# The package installed is 'orpheus-speech', but the importable module is 'orpheus_tts'.
-from orpheus_tts import OrpheusModel
-import torch
+# Import the new llama.cpp-based backend
+from orpheus_cpp import OrpheusCpp
+import numpy as np
 import base64
 import logging
+import io
+from scipy.io.wavfile import write as write_wav
 
-# Configure logging for this specific service
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - [Orpheus] - %(levelname)s - %(message)s'
+    format='%(asctime)s - [Orpheus-CPP] - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
@@ -19,19 +20,16 @@ model = None
 
 @app.on_event("startup")
 def load_model():
-    """Load the Orpheus model into memory when the service starts."""
+    """Load the Orpheus model using the OrpheusCpp backend."""
     global model
-    logger.info("Loading Orpheus TTS model...")
-    try:
-        # This combines the correct class instantiation with the necessary memory limit
-        # for running alongside the Voxtral model on the same GPU.
-        model = OrpheusModel(
-            model_name="canopylabs/orpheus-tts-0.1-finetune-prod",
-            dtype=torch.bfloat16  # Essential for multi-model setup
-        )
-        logger.info("✅ Orpheus TTS model loaded successfully.")
+    logger.info("Loading Orpheus-CPP TTS model...")
+    try
+        # Initialize the llama.cpp backend.
+        # n_gpu_layers=-1 tells it to offload all possible layers to the GPU.
+        model = OrpheusCpp(verbose=False, lang="en", options={"n_gpu_layers": -1})
+        logger.info("✅ Orpheus-CPP TTS model loaded successfully.")
     except Exception as e:
-        logger.error(f"❌ Failed to load Orpheus model: {e}", exc_info=True)
+        logger.error(f"❌ Failed to load Orpheus-CPP model: {e}", exc_info=True)
         model = None
 
 class TTSRequest(BaseModel):
@@ -46,19 +44,26 @@ def synthesize_speech(request: TTSRequest):
     
     logger.info(f"Synthesizing text: '{request.text[:50]}...' with voice '{request.voice}'")
     try:
-        audio_chunks = []
-        for chunk in model.generate_speech(prompt=request.text, voice=request.voice):
-            if chunk is not None:
-                audio_chunks.append(chunk)
+        buffer = []
+        # The Cpp model streams audio as (sample_rate, numpy_chunk)
+        for i, (sr, chunk) in enumerate(model.stream_tts_sync(request.text, options={"voice_id": request.voice})):
+            buffer.append(chunk)
 
-        if not audio_chunks:
+        if not buffer:
             raise HTTPException(status_code=500, detail="Audio generation produced no output.")
-            
-        full_audio = b''.join(audio_chunks)
-        audio_b64 = base64.b64encode(full_audio).decode('utf-8')
         
-        logger.info("Successfully synthesized audio.")
+        # The final output is a numpy array that we must convert to a WAV file in memory
+        full_audio_np = np.concatenate(buffer, axis=1)
+        
+        # Use an in-memory bytes buffer to write the WAV file
+        bytes_wav = io.BytesIO()
+        write_wav(bytes_wav, rate=24000, data=np.concatenate(full_audio_np))
+        wav_data = bytes_wav.getvalue()
+        
+        audio_b64 = base64.b64encode(wav_data).decode('utf-8')
+        
+        logger.info("Successfully synthesized audio using CPP backend.")
         return {"audio": audio_b64}
     except Exception as e:
-        logger.error(f"Error during synthesis: {e}", exc_info=True)
+        logger.error(f"Error during CPP synthesis: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred during audio synthesis: {e}")
