@@ -1,8 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from transformers import AutoProcessor, VoxtralForConditionalGeneration
-# The UserMessage object is no longer needed for this simple audio-only task
-# from mistral_common.protocol.instruct.messages import UserMessage 
 import torch
 import base64
 import numpy as np
@@ -67,18 +65,18 @@ def process_audio(request: ASRRequest):
             "-ar", "16000", "-ac", "1", "-f", "wav", "-y", temp_out_path
         ]
         
-        subprocess.run(command, check=True, capture_output=True)
+        subprocess.run(command, check=True, capture_output=True, text=True)
 
         audio_np, original_sr = sf.read(temp_out_path)
         
         os.remove(temp_in_path)
         os.remove(temp_out_path)
         
-        # --- THE FINAL, CRITICAL FIX ---
-        # Instead of wrapping the audio in a UserMessage, we pass it directly.
-        # The processor is smart enough to handle a raw numpy array correctly
-        # when passed this way. This prevents the pydantic/union_tag error.
+        # --- THE FINAL, DEFINITIVE FIX ---
+        # The processor requires the 'text' argument, even if it's empty for an audio-only task.
+        # This directly solves the "missing 1 required positional argument: 'text'" TypeError.
         inputs = processor(
+            text="",  # Provide the required text argument as an empty string.
             audio=audio_np,
             sampling_rate=16000,
             return_tensors="pt"
@@ -88,15 +86,10 @@ def process_audio(request: ASRRequest):
         generated_ids = model.generate(**inputs, max_new_tokens=150)
         response_text = processor.decode(generated_ids[0], skip_special_tokens=True)
         
-        # The model sometimes outputs just the transcription. If so, let's create a simple response.
-        # In a real app, you might call another LLM here.
-        if request.audio in response_text: # A simple check if it just transcribed
-             response_text = "I heard you say: " + response_text
-
         logger.info(f"Generated response: '{response_text}'")
         return {"text": response_text}
     except subprocess.CalledProcessError as e:
-        logger.error(f"FFMPEG conversion failed: {e.stderr.decode()}")
+        logger.error(f"FFMPEG conversion failed: {e.stderr}")
         raise HTTPException(status_code=400, detail=f"Audio conversion failed.")
     except Exception as e:
         logger.error(f"Error processing audio: {e}", exc_info=True)
