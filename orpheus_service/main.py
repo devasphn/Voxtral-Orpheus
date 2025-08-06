@@ -8,7 +8,7 @@ import logging
 import io
 from scipy.io.wavfile import write as write_wav
 
-# Configure logging
+# Configure logging for this specific service
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - [Orpheus-CPP] - %(levelname)s - %(message)s'
@@ -24,7 +24,8 @@ def load_model():
     global model
     logger.info("Loading Orpheus-CPP TTS model...")
     try:
-        model = OrpheusCpp(verbose=False, lang="en", options={"n_gpu_layers": -1})
+        # CORRECT INITIALIZATION: No 'options' parameter is passed here.
+        model = OrpheusCpp(verbose=False, lang="en")
         logger.info("✅ Orpheus-CPP TTS model loaded successfully.")
     except Exception as e:
         logger.error(f"❌ Failed to load Orpheus-CPP model: {e}", exc_info=True)
@@ -43,19 +44,30 @@ def synthesize_speech(request: TTSRequest):
     logger.info(f"Synthesizing text: '{request.text[:50]}...' with voice '{request.voice}'")
     try:
         buffer = []
+        
+        # CORRECT GENERATION CALL: The 'n_gpu_layers' option to enable GPU offloading
+        # is passed here, inside the 'options' dictionary.
+        generation_options = {
+            "voice_id": request.voice,
+            "n_gpu_layers": -1  # Offload all possible layers to the GPU
+        }
+
         # The Cpp model streams audio as (sample_rate, numpy_chunk)
-        for i, (sr, chunk) in enumerate(model.stream_tts_sync(request.text, options={"voice_id": request.voice})):
+        for i, (sr, chunk) in enumerate(model.stream_tts_sync(request.text, options=generation_options)):
             buffer.append(chunk)
 
         if not buffer:
             raise HTTPException(status_code=500, detail="Audio generation produced no output.")
         
         # The final output is a numpy array that we must convert to a WAV file in memory
-        full_audio_np = np.concatenate(buffer, axis=1)
+        # The audio chunks might have different lengths, so concatenate them.
+        # Ensure the array is contiguous in memory for some audio operations.
+        full_audio_np = np.ascontiguousarray(np.concatenate(buffer, axis=1).T)
         
         # Use an in-memory bytes buffer to write the WAV file
         bytes_wav = io.BytesIO()
-        write_wav(bytes_wav, rate=24000, data=np.concatenate(full_audio_np))
+        # The model outputs at 24000 Hz sample rate
+        write_wav(bytes_wav, rate=24000, data=full_audio_np)
         wav_data = bytes_wav.getvalue()
         
         audio_b64 = base64.b64encode(wav_data).decode('utf-8')
