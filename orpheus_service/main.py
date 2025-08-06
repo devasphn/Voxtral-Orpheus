@@ -23,8 +23,8 @@ def load_model():
     try:
         model = OrpheusModel(
             model_name="canopylabs/orpheus-tts-0.1-finetune-prod",
-            dtype=torch.bfloat16,
-            gpu_memory_utilization=0.45
+            dtype=torch.bfloat16
+            
         )
         logger.info("✅ Orpheus TTS model loaded successfully.")
     except Exception as e:
