@@ -1,85 +1,41 @@
 version: '3.8'
 
-# This Docker Compose file sets up the complete three-part microservice architecture.
-# It is optimized for deployment on a single GPU host like RunPod.
-
 services:
-  # Service 1: The Gateway
-  # This is the only service exposed to the internet. It receives user requests
-  # from the web UI and orchestrates communication between the two model services.
   gateway:
     build: ./gateway
     container_name: assistant-gateway
     ports:
-      # Maps the public port 8555 on your RunPod to the internal port 8000
-      # where the gateway application is running. This is the ONLY port you
-      # need to expose in your RunPod settings.
       - "8555:8000"
     restart: unless-stopped
-    # Ensures the model services are started before the gateway attempts to connect to them.
     depends_on:
       - orpheus_service
       - voxtral_service
     environment:
-      # These URLs use Docker's internal DNS to allow the gateway to find the
-      # other services by their container name.
       - ORPHEUS_URL=http://orpheus_service:8001
       - VOXTRAL_URL=http://voxtral_service:8002
 
-  # Service 2: The Orpheus TTS Model
-  # A dedicated container for the Text-to-Speech model, with its specific dependencies.
   orpheus_service:
     build: ./orpheus_service
     container_name: orpheus-service
-    # ipc:host is often required for PyTorch multi-processing to share memory efficiently on the host.
     ipc: host
-    deploy:
-      resources:
-        reservations:
-          # This is the correct modern syntax to grant the container access to the host's GPU.
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    # This is the corrected syntax for GPU access with Podman
+    devices:
+      - /dev/nvidia0:/dev/nvidia0
     volumes:
-      # Mounts the 'orpheus_cache' (defined below) into the container's root cache directory.
-      # This is where Hugging Face and other libraries store downloaded models.
       - orpheus_cache:/root/.cache
     restart: unless-stopped
 
-  # Service 3: The Voxtral ASR Model
-  # A dedicated container for the Speech-to-Text model, with its own set of dependencies.
   voxtral_service:
     build: ./voxtral_service
     container_name: voxtral-service
     ipc: host
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    # This is the corrected syntax for GPU access with Podman
+    devices:
+      - /dev/nvidia0:/dev/nvidia0
     volumes:
-      # Mounts the 'voxtral_cache' into this container's cache directory.
       - voxtral_cache:/root/.cache
     restart: unless-stopped
 
-# Volume Definitions
-# This is the OPTIMIZED section for RunPod. It ensures that the model data is
-# stored in your persistent /workspace directory, not the temporary container disk.
 volumes:
   orpheus_cache:
-    driver: local
-    driver_opts:
-      type: 'none'
-      o: 'bind'
-      # Binds this volume to a specific directory on the RunPod host machine.
-      device: '/workspace/devasphn-voxtral-orpheus/model_caches/orpheus'
   voxtral_cache:
-    driver: local
-    driver_opts:
-      type: 'none'
-      o: 'bind'
-      # Binds this volume to a different directory on the host machine.
-      device: '/workspace/devasphn-voxtral-orpheus/model_caches/voxtral'
