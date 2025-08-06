@@ -4,4 +4,4 @@ uvicorn[standard]==0.30.6
 orpheus-speech==0.1.0
 vllm==0.7.3
 torch==2.1.2
-pydantic<2
+pydantic>=2
