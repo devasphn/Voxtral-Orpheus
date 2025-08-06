@@ -34,7 +34,7 @@ def load_model():
         model = VoxtralForConditionalGeneration.from_pretrained(
             model_id,
             torch_dtype=torch.bfloat16,
-            attn_implementation="flash_attention_2"
+            attn_implementation="flash_attention_2",
             device_map_kwargs={"max_memory": {0: 0.45}}
         ).to(device)
         logger.info("✅ Voxtral model loaded successfully.")
