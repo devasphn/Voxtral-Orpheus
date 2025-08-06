@@ -27,8 +27,7 @@ def load_model():
         # for running alongside the Voxtral model on the same GPU.
         model = OrpheusModel(
             model_name="canopylabs/orpheus-tts-0.1-finetune-prod",
-            dtype=torch.bfloat16,
-            gpu_memory_utilization=0.45  # Essential for multi-model setup
+            dtype=torch.bfloat16  # Essential for multi-model setup
         )
         logger.info("✅ Orpheus TTS model loaded successfully.")
     except Exception as e:
