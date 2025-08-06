@@ -1,8 +1,5 @@
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
-# The new llama.cpp backend and its dependencies
-orpheus-cpp
-llama-cpp-python
-# For converting the audio output to a WAV file
+orpheus-speech
 numpy
 scipy
