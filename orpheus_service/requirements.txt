@@ -3,5 +3,5 @@ uvicorn[standard]==0.30.6
 # Critical: These exact versions are required for Orpheus to work
 orpheus-speech==0.1.0
 vllm==0.7.3
-torch==2.1.2
+torch==2.5.1
 pydantic>=2
