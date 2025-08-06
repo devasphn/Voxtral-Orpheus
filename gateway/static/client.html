@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎤 Real-Time Voice Assistant</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+        :root {
+            --bg-gradient: linear-gradient(135deg, #2B32B2 0%, #1488CC 100%);
+            --container-bg: rgba(255, 255, 255, 0.95);
+            --text-dark: #333;
+            --text-light: #f8f9fa;
+            --accent-color: #1488CC;
+            --record-color: #e74c3c;
+            --processing-color: #f39c12;
+            --connected-color: #2ecc71;
+            --shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: var(--bg-gradient);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-dark);
+            margin: 0;
+        }
+        .container {
+            background: var(--container-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: var(--shadow);
+            max-width: 600px;
+            width: 95%;
+            text-align: center;
+        }
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1.5rem;
+            color: var(--accent-color);
+        }
+        #status {
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 10px;
+            font-weight: 700;
+            color: var(--text-light);
+            transition: background-color 0.3s ease;
+        }
+        .status-connecting { background-color: var(--processing-color); }
+        .status-connected { background-color: var(--connected-color); }
+        .status-processing { background-color: var(--processing-color); }
+        .status-error { background-color: var(--record-color); }
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+        #recordBtn {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: none;
+            background-color: var(--accent-color);
+            color: var(--text-light);
+            font-size: 3rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #recordBtn:hover:not(:disabled) { transform: scale(1.1); }
+        #recordBtn.recording {
+            background-color: var(--record-color);
+            animation: pulse 1.5s infinite;
+        }
+        #recordBtn:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
+            70% { box-shadow: 0 0 0 20px rgba(231, 76, 60, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+        }
+        select {
+            padding: 0.8rem;
+            border: 2px solid #bdc3c7;
+            border-radius: 8px;
+            font-size: 1rem;
+            background: white;
+            cursor: pointer;
+        }
+        .chat-box {
+            height: 200px;
+            overflow-y: auto;
+            border: 2px solid #ecf0f1;
+            border-radius: 15px;
+            padding: 1rem;
+            margin: 1.5rem 0;
+            background: #fdfdfd;
+            scroll-behavior: smooth;
+            text-align: left;
+        }
+        .message {
+            margin-bottom: 1rem;
+            padding: 0.8rem 1.2rem;
+            border-radius: 18px;
+            max-width: 85%;
+            word-wrap: break-word;
+        }
+        .user-msg {
+            background: #e0f7fa;
+            margin-left: auto;
+            border-bottom-right-radius: 4px;
+        }
+        .assistant-msg {
+            background: #f1f8e9;
+            margin-right: auto;
+            border-bottom-left-radius: 4px;
+        }
+        .system-msg {
+            font-style: italic;
+            color: #7f8c8d;
+            text-align: center;
+            background: #ecf0f1;
+            max-width: 100%;
+        }
+        audio {
+            width: 100%;
+            margin-top: 1.5rem;
+            border-radius: 50px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Voice Assistant</h1>
+        <div id="status" class="status status-connecting">Connecting...</div>
+
+        <div class="controls">
+            <button id="recordBtn" disabled>🎤</button>
+            <select id="voiceSelect">
+                <option value="tara">Tara (Default)</option>
+                <option value="leah">Leah</option>
+                <option value="jess">Jess</option>
+                <option value="leo">Leo</option>
+                <option value="dan">Dan</option>
+                <option value="mia">Mia</option>
+                <option value="zac">Zac</option>
+                <option value="zoe">Zoe</option>
+            </select>
+        </div>
+
+        <div class="chat-box" id="chatBox"></div>
+        <audio id="audioPlayer" controls></audio>
+    </div>
+
+    <script>
+        const statusEl = document.getElementById('status');
+        const recordBtn = document.getElementById('recordBtn');
+        const voiceSelect = document.getElementById('voiceSelect');
+        const chatBox = document.getElementById('chatBox');
+        const audioPlayer = document.getElementById('audioPlayer');
+
+        let ws;
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
+
+        function setStatus(message, type) {
+            statusEl.textContent = message;
+            statusEl.className = `status status-${type}`;
+        }
+
+        function addMessage(text, sender) {
+            const msgEl = document.createElement('div');
+            msgEl.className = `message ${sender}-msg`;
+            msgEl.textContent = text;
+            chatBox.appendChild(msgEl);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function connect() {
+            const sessionId = 'session_' + Math.random().toString(36).substring(2, 15);
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/${sessionId}`;
+            
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                setStatus('Connected! Click the mic to speak.', 'connected');
+                requestMicrophoneAccess();
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleServerMessage(data);
+            };
+
+            ws.onclose = () => {
+                setStatus('Connection lost. Reconnecting...', 'error');
+                recordBtn.disabled = true;
+                setTimeout(connect, 3000);
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket Error:', error);
+                setStatus('Connection error.', 'error');
+            };
+        }
+
+        async function requestMicrophoneAccess() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        // The result contains the Base64 prefix "data:audio/webm;base64,", so we split it off.
+                        const base64Audio = reader.result.split(',')[1];
+                        sendMessage({
+                            type: 'audio',
+                            audio: base64Audio,
+                            voice: voiceSelect.value
+                        });
+                        addMessage('You: [Sent voice message]', 'user');
+                    };
+                    reader.readAsDataURL(audioBlob);
+                    audioChunks = [];
+                };
+                
+                recordBtn.disabled = false;
+            } catch (error) {
+                console.error('Microphone access denied:', error);
+                setStatus('Microphone access denied!', 'error');
+                addMessage('Microphone is required for voice input.', 'system');
+            }
+        }
+
+        function handleServerMessage(data) {
+            if (data.type === 'audio_response') {
+                setStatus('Response received! Click mic to speak.', 'connected');
+                addMessage(`Assistant: ${data.text}`, 'assistant');
+                
+                const audioSrc = `data:audio/wav;base64,${data.audio}`;
+                audioPlayer.src = audioSrc;
+                audioPlayer.play();
+            } else if (data.type === 'error') {
+                setStatus(`Error: ${data.message}`, 'error');
+                addMessage(`Server Error: ${data.message}`, 'system');
+            }
+        }
+        
+        function sendMessage(message) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(message));
+                setStatus('Processing your request...', 'processing');
+            }
+        }
+
+        function toggleRecording() {
+            if (isRecording) {
+                // Stop recording
+                mediaRecorder.stop();
+                isRecording = false;
+                recordBtn.classList.remove('recording');
+                recordBtn.innerHTML = '🎤';
+                setStatus('Processing audio...', 'processing');
+            } else {
+                // Start recording
+                mediaRecorder.start();
+                isRecording = true;
+                recordBtn.classList.add('recording');
+                recordBtn.innerHTML = '◼️';
+                setStatus('Recording... Click to stop.', 'processing');
+            }
+        }
+
+        recordBtn.addEventListener('click', toggleRecording);
+        connect();
+    </script>
+</body>
+</html>
