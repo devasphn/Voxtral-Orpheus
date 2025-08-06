@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from transformers import AutoProcessor, VoxtralForConditionalGeneration
+from transformers import VoxtralForConditionalGeneration, AutoProcessor
 import torch
 import base64
 import numpy as np
@@ -34,88 +34,89 @@ def load_model():
         model = VoxtralForConditionalGeneration.from_pretrained(
             model_id,
             torch_dtype=torch.bfloat16,
-            attn_implementation="flash_attention_2"
-        ).to(device)
+            device_map=device,
+            attn_implementation="flash_attention_2"  # Enable flash attention
+        )
         logger.info("✅ Voxtral model loaded successfully.")
     except Exception as e:
         logger.error(f"❌ Failed to load Voxtral model: {e}", exc_info=True)
         model = None
 
 class ASRRequest(BaseModel):
-    audio: str # Base64 encoded webm audio
+    audio: str  # Base64 encoded webm audio
 
 @app.post("/process")
 def process_audio(request: ASRRequest):
-    """Takes base64-encoded audio, returns transcribed and generated text."""
+    """Takes base64-encoded audio, returns transcribed text using proper Voxtral workflow."""
     if not model or not processor:
         raise HTTPException(status_code=503, detail="Model is not loaded or failed to initialize.")
 
     logger.info("Processing incoming audio request...")
     try:
+        # Decode base64 audio
         audio_data = base64.b64decode(request.audio)
         
+        # Create temporary files
         with tempfile.NamedTemporaryFile(delete=False, suffix='.webm') as temp_in:
             temp_in.write(audio_data)
             temp_in_path = temp_in.name
         
         temp_out_path = temp_in_path + '.wav'
 
-        command = ["ffmpeg", "-i", temp_in_path, "-ar", "16000", "-ac", "1", "-f", "wav", "-y", temp_out_path]
+        # Convert WebM to WAV at 16kHz (required for Voxtral/Whisper)
+        command = [
+            "ffmpeg", "-i", temp_in_path, 
+            "-ar", "16000",  # 16kHz sampling rate
+            "-ac", "1",      # Mono channel
+            "-f", "wav", 
+            "-y", temp_out_path
+        ]
         subprocess.run(command, check=True, capture_output=True, text=True)
 
+        # Load audio for processing
         audio_np, sampling_rate = sf.read(temp_out_path)
         
+        # Clean up temp files
         os.remove(temp_in_path)
         os.remove(temp_out_path)
         
-        # --- THE FINAL, DEFINITIVE FIX ---
-        # The Voxtral model requires a specific prompt structure and manual input merging.
-        # This is the correct and final way to build the inputs.
-        prompt = "User: <|audio|>Please transcribe the audio."
+        # Use Voxtral for transcription (correct method)
+        logger.info("Using Voxtral transcription mode...")
         
-        # 1. Process the audio using the feature extractor.
-        audio_features = processor.feature_extractor(
-            audio_np, sampling_rate=sampling_rate, return_tensors="pt"
-        ).to(device)
-
-        # 2. Process the text prompt using the tokenizer.
-        text_inputs = processor.tokenizer(prompt, return_tensors="pt").to(device)
-
-        # 3. CRITICAL STEP: Manually merge the text and audio inputs.
-        #    This function correctly places the audio features where the <|audio|> token is.
-        #    This solves the "shape mismatch" error permanently.
-        merged_inputs = processor.interleave_inputs_for_multimodal_generate(
-            text_inputs=text_inputs, audio_features=audio_features
+        # Apply transcription request properly
+        inputs = processor.apply_transcription_request(
+            language="en", 
+            audio=audio_np,
+            model_id="mistralai/Voxtral-Mini-3B-2507",
+            sampling_rate=sampling_rate
         )
-
-        # 4. Generate the response using the correctly merged inputs.
-        generated_ids = model.generate(**merged_inputs, max_new_tokens=150)
-        # --- END OF FIX ---
         
-        # The batch_decode function is the correct way to get the text output.
-        full_response = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+        inputs = inputs.to(device, dtype=torch.bfloat16)
         
-        # The model's output contains the full conversation turn. We extract just the assistant's part.
-        # The response will typically be in the format "User: <transcription> Assistant: <response>"
-        # We will find the "Assistant:" part to get the clean response.
-        assistant_marker = "Assistant:"
-        if assistant_marker in full_response:
-            response_text = full_response.split(assistant_marker, 1)[1].strip()
-        else:
-             # Fallback if the model only transcribes
-            user_marker = "User:"
-            if user_marker in full_response:
-                response_text = full_response.split(user_marker, 1)[1].replace("<|audio|>", "").strip()
-            else:
-                response_text = full_response # Should not happen, but a safe fallback.
-
-
-        logger.info(f"Generated response: '{response_text}'")
-        return {"text": response_text}
+        # Generate transcription
+        generated_ids = model.generate(**inputs, max_new_tokens=150)
+        
+        # Decode the transcription
+        transcription = processor.batch_decode(
+            generated_ids[:, inputs.input_ids.shape[1]:], 
+            skip_special_tokens=True
+        )[0]
+        
+        logger.info(f"Transcribed text: '{transcription}'")
+        return {"text": transcription.strip()}
         
     except subprocess.CalledProcessError as e:
         logger.error(f"FFMPEG conversion failed: {e.stderr}")
-        raise HTTPException(status_code=400, detail=f"Audio conversion failed.")
+        raise HTTPException(status_code=400, detail="Audio conversion failed.")
     except Exception as e:
         logger.error(f"Error processing audio: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while processing audio.")
+        raise HTTPException(status_code=500, detail=f"Audio processing error: {str(e)}")
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint."""
+    return {
+        "status": "healthy", 
+        "model_loaded": model is not None,
+        "device": device
+    }
