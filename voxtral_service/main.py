@@ -60,11 +60,7 @@ def process_audio(request: ASRRequest):
         
         temp_out_path = temp_in_path + '.wav'
 
-        command = [
-            "ffmpeg", "-i", temp_in_path,
-            "-ar", "16000", "-ac", "1", "-f", "wav", "-y", temp_out_path
-        ]
-        
+        command = ["ffmpeg", "-i", temp_in_path, "-ar", "16000", "-ac", "1", "-f", "wav", "-y", temp_out_path]
         subprocess.run(command, check=True, capture_output=True, text=True)
 
         audio_np, sampling_rate = sf.read(temp_out_path)
@@ -73,31 +69,46 @@ def process_audio(request: ASRRequest):
         os.remove(temp_out_path)
         
         # --- THE FINAL, DEFINITIVE FIX ---
-        # The Voxtral model requires the special <|audio|> token in the prompt
-        # to know where to insert the audio features. This solves the shape mismatch error.
-        prompt = "Please transcribe the following audio. <|audio|>"
+        # The Voxtral model requires a specific prompt structure and manual input merging.
+        # This is the correct and final way to build the inputs.
+        prompt = "User: <|audio|>Please transcribe the audio."
         
         # 1. Process the audio using the feature extractor.
-        audio_inputs = processor.feature_extractor(
+        audio_features = processor.feature_extractor(
             audio_np, sampling_rate=sampling_rate, return_tensors="pt"
         ).to(device)
 
         # 2. Process the text prompt using the tokenizer.
         text_inputs = processor.tokenizer(prompt, return_tensors="pt").to(device)
-        
-        # 3. The model's generate function correctly accepts both sets of inputs.
-        generated_ids = model.generate(
-            input_features=audio_inputs.input_features,
-            input_ids=text_inputs.input_ids,
-            attention_mask=text_inputs.attention_mask,
-            max_new_tokens=150
+
+        # 3. CRITICAL STEP: Manually merge the text and audio inputs.
+        #    This function correctly places the audio features where the <|audio|> token is.
+        #    This solves the "shape mismatch" error permanently.
+        merged_inputs = processor.interleave_inputs_for_multimodal_generate(
+            text_inputs=text_inputs, audio_features=audio_features
         )
+
+        # 4. Generate the response using the correctly merged inputs.
+        generated_ids = model.generate(**merged_inputs, max_new_tokens=150)
         # --- END OF FIX ---
         
+        # The batch_decode function is the correct way to get the text output.
         full_response = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
         
-        # The model's output now includes the prompt, so we remove it.
-        response_text = full_response.replace("Please transcribe the following audio. ", "").strip()
+        # The model's output contains the full conversation turn. We extract just the assistant's part.
+        # The response will typically be in the format "User: <transcription> Assistant: <response>"
+        # We will find the "Assistant:" part to get the clean response.
+        assistant_marker = "Assistant:"
+        if assistant_marker in full_response:
+            response_text = full_response.split(assistant_marker, 1)[1].strip()
+        else:
+             # Fallback if the model only transcribes
+            user_marker = "User:"
+            if user_marker in full_response:
+                response_text = full_response.split(user_marker, 1)[1].replace("<|audio|>", "").strip()
+            else:
+                response_text = full_response # Should not happen, but a safe fallback.
+
 
         logger.info(f"Generated response: '{response_text}'")
         return {"text": response_text}
