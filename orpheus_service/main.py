@@ -1,11 +1,13 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+# This is the crucial correction you identified.
+# The package installed is 'orpheus-speech', but the importable module is 'orpheus_tts'.
 from orpheus_tts import OrpheusModel
 import torch
 import base64
 import logging
 
-# Configure logging
+# Configure logging for this specific service
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - [Orpheus] - %(levelname)s - %(message)s'
@@ -21,10 +23,12 @@ def load_model():
     global model
     logger.info("Loading Orpheus TTS model...")
     try:
+        # This combines the correct class instantiation with the necessary memory limit
+        # for running alongside the Voxtral model on the same GPU.
         model = OrpheusModel(
             model_name="canopylabs/orpheus-tts-0.1-finetune-prod",
-            dtype=torch.bfloat16
-            
+            dtype=torch.bfloat16,
+            gpu_memory_utilization=0.45  # Essential for multi-model setup
         )
         logger.info("✅ Orpheus TTS model loaded successfully.")
     except Exception as e:
