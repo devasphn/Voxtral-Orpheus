@@ -47,6 +47,54 @@ services:
       - voxtral_cache:/root/.cache
     restart: unless-stopped
 
+# In docker-compose.yml
+
 volumes:
+  # Map the named volumes to a specific path on the host (/workspace)
   orpheus_cache:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/workspace/model_caches/orpheus'
   voxtral_cache:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/workspace/model_caches/voxtral'```
+While this is technically the "best practice," it adds complexity. **For simplicity and guaranteed success, your initial plan of a large Container Disk is perfectly fine and easier to manage.**
+
+**Conclusion:** Your plan of **Container Disk: 80 GB** and **Volume Disk: 50 GB** is **sufficient and safe.** You can proceed with this.
+
+---
+
+### 3. Port Exposure: 8555, 8001, 8002, 8000 (CRITICAL CORRECTION NEEDED)
+
+This is the most important point to correct. You **only need to expose port 8555.**
+
+**You should NOT expose ports 8000, 8001, and 8002 to the public internet.**
+
+**Explanation:**
+
+*   **Public vs. Internal Ports**: Think of your Docker setup as a private, internal network inside your RunPod.
+    *   The `voxtral_service` runs on port `8002` *inside* this private network.
+    *   The `orpheus_service` runs on port `8001` *inside* this private network.
+    *   The `gateway` service runs on port `8000` *inside* this private network.
+*   **Docker Networking**: Docker Compose automatically lets these services talk to each other using their names (e.g., `http://voxtral_service:8002`). This communication is secure and internal.
+*   **The Gateway's Role**: The `gateway` is your only public-facing door. In the `docker-compose.yml`, the line `ports: - "8555:8000"` means: "Take any traffic that comes into the RunPod on public port **8555** and forward it to the `gateway` container on its internal port **8000**."
+
+Exposing the model service ports (8001, 8002) directly to the internet is unnecessary and a security risk.
+
+### **Final Recommended RunPod Configuration**
+
+This is the exact configuration you should use when creating your pod.
+
+| Setting | Value | Reason |
+| :--- | :--- | :--- |
+| **GPU** | NVIDIA A40 | Excellent performance and VRAM. |
+| **Container Disk** | **80 GB** | Safe amount for the OS, Docker images, and model caches. |
+| **Volume Disk** | **50 GB** | Plenty of persistent space for your code. |
+| **Expose TCP Ports**| **8555** | **This is the ONLY port you need to expose.** It's the public entry point to your application's gateway. |
+
+You are asking all the right questions. With these settings, your deployment will be configured correctly, securely, and efficiently.
