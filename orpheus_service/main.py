@@ -23,9 +23,7 @@ def load_model():
     """Load the Orpheus model using the OrpheusCpp backend."""
     global model
     logger.info("Loading Orpheus-CPP TTS model...")
-    try
-        # Initialize the llama.cpp backend.
-        # n_gpu_layers=-1 tells it to offload all possible layers to the GPU.
+    try:
         model = OrpheusCpp(verbose=False, lang="en", options={"n_gpu_layers": -1})
         logger.info("✅ Orpheus-CPP TTS model loaded successfully.")
     except Exception as e:
