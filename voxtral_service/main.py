@@ -7,7 +7,10 @@ import base64
 import librosa
 import numpy as np
 import io
-import soundfile as sf
+# The soundfile library is removed as it was the source of the error.
+# import soundfile as sf 
+# The torchaudio library is added as it is robust for format conversion.
+import torchaudio
 import logging
 
 # Configure logging
@@ -53,7 +56,14 @@ def process_audio(request: ASRRequest):
     logger.info("Processing incoming audio request...")
     try:
         audio_data = base64.b64decode(request.audio)
-        audio_np, original_sr = sf.read(io.BytesIO(audio_data))
+        
+        # --- CRITICAL FIX ---
+        # Replace the fragile sf.read with the robust torchaudio.load
+        # torchaudio uses ffmpeg to handle almost any audio format, including webm.
+        waveform, original_sr = torchaudio.load(io.BytesIO(audio_data))
+        # torchaudio loads to a tensor, convert it to a numpy array
+        audio_np = waveform.numpy().flatten()
+        # --- END OF FIX ---
 
         if audio_np.ndim > 1:
             audio_np = np.mean(audio_np, axis=1)
